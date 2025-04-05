@@ -8,9 +8,11 @@ app = Flask(__name__)
 
 # Set up a custom config for Newspaper3k with additional headers
 config = Config()
-ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-      "AppleWebKit/537.36 (KHTML, like Gecko) "
-      "Chrome/83.0.4103.61 Safari/537.36")
+ua = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/83.0.4103.61 Safari/537.36"
+)
 config.browser_user_agent = ua
 config.request_headers = {
     "User-Agent": ua,
@@ -46,12 +48,6 @@ def extract():
     except Exception as e:
         logging.error("Error processing URL", exc_info=True)
         return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-
 
 if __name__ == "__main__":
     import os
