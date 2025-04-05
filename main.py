@@ -3,18 +3,32 @@ logging.basicConfig(level=logging.DEBUG)
 
 from flask import Flask, request, jsonify
 from newspaper import Article, Config
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 
-# Set up a custom config with a common browser user agent
-config = Config()
-config.browser_user_agent = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/83.0.4103.61 Safari/537.36"
+# Set up rate limiting: for example, 10 requests per minute per IP.
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["10 per minute"]
 )
 
+# Set up a custom config for Newspaper3k with additional headers
+config = Config()
+ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+      "AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/83.0.4103.61 Safari/537.36")
+config.browser_user_agent = ua
+config.request_headers = {
+    "User-Agent": ua,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5"
+}
+
 @app.route("/extract", methods=["POST"])
+@limiter.limit("10 per minute")  # You can also add a specific limit for this endpoint
 def extract():
     data = request.json
     logging.debug(f"Received data: {data}")
