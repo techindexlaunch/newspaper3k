@@ -2,6 +2,7 @@ import asyncio
 import random
 import logging
 import time
+import subprocess
 
 from flask import Flask, request, jsonify
 from newspaper import Article, Config
@@ -24,7 +25,7 @@ USER_AGENTS = [
 def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
-# Enable proxy usage if needed. Set USE_PROXY to True and configure your proxy pool.
+# Enable proxy usage if needed. Set USE_PROXY to True and configure your proxy details.
 USE_PROXY = False  # Change to True if you have proxy servers available.
 PROXIES = [
     "http://proxy1.example.com:port",
@@ -62,14 +63,11 @@ async def get_rendered_html(url: str) -> str:
         )
         page = await context.new_page()
         logging.debug(f"Navigating to URL: {url}")
-        try:
-            await page.goto(url, timeout=60000)
-        except Exception as nav_error:
-            logging.error(f"Error navigating to {url}", exc_info=True)
-            raise nav_error
+        await page.goto(url, timeout=60000)
+        # Wait for the article element; adjust the selector if necessary.
         try:
             await page.wait_for_selector("article", timeout=60000)
-        except Exception as wait_error:
+        except Exception as e:
             logging.warning(f"Article selector not found for {url}. Proceeding anyway.", exc_info=True)
         html = await page.content()
         await browser.close()
@@ -85,45 +83,35 @@ def extract():
         logging.error("No URL provided in request")
         return jsonify({"error": "No URL provided"}), 400
 
-    # Optional: add a slight delay to prevent rapid-fire requests.
+    # Optional: Introduce a slight delay to avoid rapid-fire requests.
     time.sleep(1)
 
     try:
-        # First, use Playwright to retrieve the fully rendered HTML.
+        # Use Playwright to get the fully rendered HTML.
         html_content = asyncio.run(get_rendered_html(url))
         logging.debug("Rendered HTML successfully retrieved.")
 
-        # Now, create a Newspaper3k config with a random user agent.
+        # Create Newspaper3k config with a rotated user agent.
         ua = get_random_user_agent()
         config = create_config(ua)
         article = Article(url, config=config)
-        # Inject the rendered HTML instead of performing a fresh download.
+        # Instead of downloading, set the rendered HTML.
         article.set_html(html_content)
-        article.parse()
-        logging.debug(f"Extraction successful for URL: {url} without proxy.")
-    
-    except Exception as e:
-        error_str = str(e)
-        logging.error("Error on first extraction attempt", exc_info=True)
-        # If a 403 error is encountered and proxy usage is enabled, attempt retry.
-        if "403" in error_str and USE_PROXY:
+        
+        # If using a proxy and encountering 403 errors, you can retry:
+        if USE_PROXY:
             try:
-                logging.info("403 detected, retrying with proxy...")
-                ua = get_random_user_agent()
-                config = create_config(ua)
-                article = Article(url, config=config)
-                # Retrieve HTML again, now using a proxy
-                proxy = {"http": get_random_proxy(), "https": get_random_proxy()}
-                html_content_proxy = asyncio.run(get_rendered_html(url))
-                article.set_html(html_content_proxy)
-                article.parse()
-                logging.debug(f"Extraction successful for URL: {url} with proxy.")
+                article.download(proxies={"http": get_random_proxy(), "https": get_random_proxy()})
             except Exception as proxy_exception:
-                logging.error("Error processing URL with proxy", exc_info=True)
-                return jsonify({"error": str(proxy_exception)}), 500
-        else:
-            return jsonify({"error": error_str}), 500
-    
+                logging.warning("Proxy retry failed", exc_info=True)
+        
+        article.parse()
+        logging.debug(f"Extraction successful for URL: {url}")
+
+    except Exception as e:
+        logging.error("Error processing URL", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
     response_data = {
         "title": article.title,
         "authors": article.authors,
@@ -135,6 +123,9 @@ def extract():
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 5000))
+    # Ensure Playwright browsers are installed before running the app.
+    subprocess.run(["python", "-m", "playwright", "install"], check=True)
     app.run(host="0.0.0.0", port=port)
+
 
 
