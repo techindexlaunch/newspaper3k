@@ -2,9 +2,17 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 from flask import Flask, request, jsonify
-from newspaper import Article
+from newspaper import Article, Config
 
 app = Flask(__name__)
+
+# Set up a custom config with a common browser user agent
+config = Config()
+config.browser_user_agent = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/83.0.4103.61 Safari/537.36"
+)
 
 @app.route("/extract", methods=["POST"])
 def extract():
@@ -17,7 +25,8 @@ def extract():
         return jsonify({"error": "No URL provided"}), 400
 
     try:
-        article = Article(url)
+        # Use the custom config when creating the Article
+        article = Article(url, config=config)
         article.download()
         article.parse()
 
