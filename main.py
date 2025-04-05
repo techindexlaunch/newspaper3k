@@ -1,3 +1,6 @@
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 from flask import Flask, request, jsonify
 from newspaper import Article
 
