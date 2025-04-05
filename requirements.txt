@@ -2,3 +2,4 @@ Flask==2.2.5
 newspaper3k==0.2.8
 gunicorn==20.1.0
 lxml_html_clean
+Flask-Limiter==2.7.0
