@@ -1,7 +1,7 @@
 import random
 import logging
 import time
-import requests
+import cloudscraper
 from flask import Flask, request, jsonify
 from newspaper import Article
 
@@ -19,12 +19,11 @@ USER_AGENTS = [
 ]
 
 def get_random_user_agent():
-    """Return a random user agent string."""
     return random.choice(USER_AGENTS)
 
 def fetch_article_html(url):
     """
-    Fetch HTML content from the given URL using enhanced headers that mimic a real browser.
+    Fetch HTML content from the given URL using CloudScraper to bypass anti-bot protections.
     """
     headers = {
         "User-Agent": get_random_user_agent(),
@@ -35,14 +34,17 @@ def fetch_article_html(url):
         "Upgrade-Insecure-Requests": "1",
         "Referer": "https://www.google.com/"
     }
-    session = requests.Session()
-    response = session.get(url, headers=headers, timeout=10)
-    response.raise_for_status()  # Will raise an exception for HTTP errors
-    return response.text
+    scraper = cloudscraper.create_scraper()  # CloudScraper session
+    response = scraper.get(url, headers=headers, timeout=15)
+    response.raise_for_status()
+    html = response.text.strip()
+    if not html:
+        raise Exception("Empty HTML received")
+    return html
 
 def extract_article(url):
     """
-    Extract article data by manually fetching the HTML and letting Newspaper3k parse it.
+    Extract article data by manually fetching the HTML (using CloudScraper) and letting Newspaper3k parse it.
     """
     try:
         html = fetch_article_html(url)
@@ -61,9 +63,6 @@ def extract_article(url):
 
 @app.route("/extract", methods=["POST"])
 def extract_route():
-    """
-    Flask route to handle POST requests for article extraction.
-    """
     data = request.json
     url = data.get("url")
     if not url:
@@ -73,4 +72,5 @@ def extract_route():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
