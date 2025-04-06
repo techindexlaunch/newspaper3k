@@ -22,8 +22,8 @@ USER_AGENTS = [
 def get_random_user_agent():
     return random.choice(USER_AGENTS)
 
-# Optionally use a proxy if needed. Set USE_PROXY to True and update the proxies dictionary.
-USE_PROXY = False  # Change to True if you have a proxy service.
+# Optional: use a proxy if needed.
+USE_PROXY = False  # Set to True if you have a proxy service.
 proxies = {
     'http': 'http://your-proxy-address:port',
     'https': 'http://your-proxy-address:port',
@@ -44,6 +44,31 @@ def create_config(user_agent):
     }
     return config
 
+def robust_download(url, max_attempts=3, delay=2):
+    """
+    Try to download and parse the article with multiple attempts, rotating user agents.
+    """
+    for attempt in range(1, max_attempts + 1):
+        ua = get_random_user_agent()
+        config = create_config(ua)
+        article = Article(url, config=config)
+        try:
+            logging.debug(f"Attempt {attempt} for URL: {url} using UA: {ua}")
+            if USE_PROXY:
+                article.download(proxies=proxies)
+            else:
+                article.download()
+            # Check that HTML was actually retrieved
+            if not article.html:
+                raise Exception("Empty HTML received")
+            article.parse()
+            return article
+        except Exception as e:
+            logging.warning(f"Attempt {attempt} failed for URL: {url} with error: {e}", exc_info=True)
+            # Introduce a delay before retrying
+            time.sleep(delay)
+    raise Exception(f"All {max_attempts} attempts failed for URL: {url}")
+
 @app.route("/extract", methods=["POST"])
 def extract():
     data = request.json
@@ -58,23 +83,7 @@ def extract():
     time.sleep(1)
 
     try:
-        # Set up Newspaper3k with a rotated user agent and robust headers.
-        ua = get_random_user_agent()
-        config = create_config(ua)
-        article = Article(url, config=config)
-        
-        # If proxy usage is enabled, try downloading with proxies.
-        if USE_PROXY:
-            try:
-                article.download(proxies=proxies)
-            except Exception as proxy_exception:
-                logging.warning("Proxy download failed, retrying without proxy", exc_info=True)
-                article.download()
-        else:
-            article.download()
-        
-        article.parse()
-
+        article = robust_download(url)
         response_data = {
             "title": article.title,
             "authors": article.authors,
